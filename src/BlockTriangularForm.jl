@@ -1,9 +1,11 @@
 module BlockTriangularForm
 
 flip(j) = -j - 2
-islipped(j) = j < -1
+isflipped(j) = j < -1
 unflip(j) = isflipped(j) ? flip(j) : j
 const EMPTY = -1
+const UNVISITED = -2
+const UNASSIGNED = -1
 
 # ==========================================================================
 # === augment ==============================================================
@@ -117,7 +119,8 @@ function augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, m
         end
 
         pstart = Pstack[head]
-        for p ∈ pstart:pend
+        p = pstart
+        for outer p ∈ pstart:(pend - 1)
             i = Ai[p]
             j2 = Match[i]
             if Flag[j2] != k
@@ -175,10 +178,117 @@ function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti
     return work, Match
 end
 
+function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack, Pstack)
+    chead = 1
+    jhead = 1
+    Jstack[1] = j
+    @assert Flag[j] == UNVISITED
+    while jhead > 0
+        j = Jstack[jhead] # grab the node j from the top of Jstack
+
+        # determine which column jj of the A is column j of A*Q
+        jj = Q === nothing ? j : unflip(Q[j])
+        pend = Ap[jj + 1]
+        
+        if Flag[j] == UNVISITED
+            # node j is visited for the first time
+            Cstack[chead += 1] = j # push j onto the stack
+            timestamp += 1 # get a timestamp
+            Time[j] = timestamp # give the timestamp to j
+            Low[j] = timestamp
+            Flag[j] = UNASSIGNED # flag j as visited
+
+            # set Pstack [jhead] to the first entry in column j to scan
+            Pstack[jhead] = Ap[jj]
+        end
+        # DFS rooted at node j (start or continue where left off)
+        p = Pstack[jhead]
+        while p < (pend)
+            i = Ai[p]
+            if Flag[i] == UNVISITED
+                # node i has not been visited, DFS from node i
+                # keep track of where we left off in scan of adj list for j
+                # so we can restart j where we left off
+                Pstack[jhead] = p + 1
+                # push i onto the stack and break to recurse on i.
+                Jstack[jhead += 1] = i
+                @assert Time[i] == EMPTY
+                @assert Low[i] == EMPTY
+                break
+            elseif Flag[i] == UNASSIGNED
+                # node i is visited but assigned to a block
+                # if Time[i] < Time[j] this is a backedge
+                @assert Time[i] > 0
+                @assert Low[i] > 0
+                Low[j] = min(Low[j], Time[i])
+                p += 1
+            end
+        end
+        if p == pend
+            # if all adj nodes are visited pop j and do the post work for j
+            jhead -= 1
+
+            if Low[j] == Time[j]
+                while true
+                    @assert chead > 0
+                    i = Cstack[chead]
+                    chead -= 1
+                    @assert i > 0
+                    @assert Flag[i] == UNASSIGNED
+                    Flag[i] = nblocks
+                    i == j && break
+                end
+                nblocks += 1
+            end
+            if jhead > 1
+                parent = Jstack[jhead]
+                Low[parent] = min(Low[parent], Low[j])
+            end
+        end
+    end
+    return nblocks, timestamp
+end
+
 function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
-    P = Vector{Ti}(undef, n)
-    R = Vector{Ti}(undef, n + 1)
-    
+    P = fill(Ti(EMPTY), n)
+    R = fill(Ti(EMPTY), n + 1)
+    Time = fill(Ti(EMPTY), n)
+    Flag = fill(Ti(UNVISITED), n)
+    Low = P
+    Cstack = R
+    Jstack = fill(Ti(EMPTY), n)
+    Pstack = fill(Ti(EMPTY), n)
+
+    timestamp = 1
+    nblocks = 1
+    for j ∈ 1:n
+        if Flag[j] == UNVISITED
+            nblocks, timestamp = dfs!(
+                j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp,
+                Cstack, Jstack, Pstack
+            )
+        end
+    end
+    println(Flag)
+    R[1:nblocks] .= 1
+    for j ∈ 1:n
+        R[Flag[j]] += 1
+    end
+    Time[1] = 1
+    cumsum!(R, R)
+    R[nblocks] = n
+
+    for j ∈ 1:n
+        P[Time[Flag[j]] += 1] = j
+    end
+
+    if Q !== nothing
+        for k ∈ 1:n
+            Time[k] = Q[P[k]]
+        end
+        Q .= Time
+    end
+    return nblocks, P, R
 end
 
 function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
@@ -208,10 +318,10 @@ function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
             end
         end
     end
-
-    return strongcomp!(n, Ap, Ai, Q)
+    nblocks, P, R = strongcomp!(n, Ap, Ai, Q)
+    return Q, P, R, nmatch, nblocks
 end
 
-
-
 end
+
+using Libdl
