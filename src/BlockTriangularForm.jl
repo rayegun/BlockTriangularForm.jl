@@ -95,8 +95,7 @@ function augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, m
         j = Jstack[head]
         pend = Ap[j + 1]
 
-        local i
-
+        i = 0
         if Flag[j] != k
             # prework for node j
             Flag[j] = k
@@ -115,12 +114,12 @@ function augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, m
         end
 
         if quick && work > maxwork
-            return EMPTY
+            return found, work
         end
 
         pstart = Pstack[head]
         p = pstart
-        for outer p ∈ pstart:(pend - 1)
+        while p < (pend)
             i = Ai[p]
             j2 = Match[i]
             if Flag[j2] != k
@@ -130,6 +129,7 @@ function augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, m
                 Jstack[head] = j2
                 break
             end
+            p += 1
         end
         work += p - pstart + 1
 
@@ -165,9 +165,9 @@ function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti
     work_lim_reached = false
     for k ∈ 1:ncol
         result, work = augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, maxwork)
-        if result == 1
+        if result
             nmatch += 1
-        elseif result == EMPTY
+        else
             work_lim_reached = true
         end
     end
@@ -175,7 +175,7 @@ function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti
     if work_lim_reached
         work = EMPTY
     end
-    return work, Match
+    return nmatch, Match
 end
 
 function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack, Pstack)
@@ -221,8 +221,8 @@ function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack,
                 @assert Time[i] > 0
                 @assert Low[i] > 0
                 Low[j] = min(Low[j], Time[i])
-                p += 1
             end
+            p += 1
         end
         if p == pend
             # if all adj nodes are visited pop j and do the post work for j
@@ -259,7 +259,7 @@ function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
     Jstack = fill(Ti(EMPTY), n)
     Pstack = fill(Ti(EMPTY), n)
 
-    timestamp = 1
+    timestamp = 0
     nblocks = 1
     for j ∈ 1:n
         if Flag[j] == UNVISITED
@@ -270,16 +270,23 @@ function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
         end
     end
     println(Flag)
-    R[1:nblocks] .= 1
+    nblocks -= 1
+    R[1:nblocks] .= 0
     for j ∈ 1:n
         R[Flag[j]] += 1
     end
     Time[1] = 1
-    cumsum!(R, R)
-    R[nblocks] = n
+    for b ∈ 2:nblocks
+        Time[b] = Time[b - 1] + R[b - 1]
+    end
+    for b ∈ 1:nblocks
+        R[b] = Time[b]
+    end
+    R[nblocks + 1] = n
 
     for j ∈ 1:n
-        P[Time[Flag[j]] += 1] = j
+        P[Time[Flag[j]]] = j
+        Time[Flag[j]] += 1
     end
 
     if Q !== nothing
@@ -293,6 +300,7 @@ end
 
 function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
     nmatch, Q = maxtrans(n, n, Ap, Ai, maxwork)
+    println(nmatch)
     if nmatch < n
         Flag = zeros(Bool, n)
         for i ∈ 1:n
@@ -323,5 +331,3 @@ function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
 end
 
 end
-
-using Libdl
