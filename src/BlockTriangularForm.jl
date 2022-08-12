@@ -147,7 +147,57 @@ function augment!(k, Ap, Ai, Match, Cheap, Flag, Istack, Jstack, Pstack, work, m
     return found, work
 end
 
-function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
+"""
+    maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
+
+Finds a permutation of the columns of a matrix so that it has a
+zero-free diagonal.  The input is an m-by-n sparse matrix in compressed
+column form.  The array Ap of size n+1 gives the starting and ending
+positions of the columns in the array Ai.  Ap[1] must be one. The array Ai
+contains the row indices of the nonzeros of the matrix A, and is of size
+Ap[n + 1].  The row indices of column j are located in Ai[Ap[j] ... Ap[j+1]-1].
+Row indices must be in the range 0 to m-1.  Duplicate entries may be present
+in any given column.  The input matrix  is not checked for validity (row
+indices out of the range 0 to m-1 will lead to an undeterminate result -
+possibly a core dump, for example).  Row indices in any given column need
+not be in sorted order.  However, if they are sorted and the matrix already
+has a zero-free diagonal, then the identity permutation is returned.
+
+The output of `maxtrans` is an array Match of size n.  If row i is matched
+with column j, then A(i,j) is nonzero, and then Match[i] = j.  If the matrix
+is structurally nonsingular, all entries in the Match array are unique, and
+Match can be viewed as a column permutation if A is square.  That is, column
+k of the original matrix becomes column `Match[k]` of the permuted matrix.  
+This can be expressed as (for non-structurally singular matrices):
+
+    nmatch, Match = maxtrans(A)
+    B = A[:, Match]
+
+If row i is not matched to any column, then `Match[i] is == -1`.  The
+`maxtrans` routine returns the number of nonzeros on diagonal of the
+permuted matrix `nmatch` and `Match`.
+
+# Notes
+This algorithm is based on the paper "On Algorithms for obtaining a maximum
+transversal" by Iain Duff, ACM Trans. Mathematical Software, vol 7, no. 1,
+pp. 315-330, and "Algorithm 575: Permutations for a zero-free diagonal",
+same issue, pp. 387-390.  Algorithm 575 is MC21A in the Harwell Subroutine
+Library.  This code is not merely a translation of the Fortran code into C.
+It is a completely new implementation of the basic underlying method (depth
+first search over a subgraph with nodes corresponding to columns matched so
+far, and cheap matching).  This code was written with minimal observation of
+the MC21A/B code itself.  See comments below for a comparison between the
+maxtrans and MC21A/B codes.
+
+This routine operates on a column-form matrix and produces a column
+permutation.  MC21A uses a row-form matrix and produces a row permutation.
+The difference is merely one of convention in the comments and interpretation
+of the inputs and outputs.  If you want a row permutation, simply pass a
+compressed-row sparse matrix to this routine and you will get a row
+permutation (just like MC21A).  Similarly, you can pass a column-oriented
+matrix to MC21A and it will happily return a column permutation.
+"""
+function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}; maxwork = -1) where {Ti}
     Cheap = Vector{Ti}(undef, ncol)
     Flag = Vector{Ti}(undef, ncol)
     Istack = Vector{Ti}(undef, ncol)
@@ -178,6 +228,11 @@ function maxtrans(nrow, ncol, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti
     end
     return nmatch, Match
 end
+
+maxtrans(A::SparseMatrixCSC; maxwork = -1) = maxtrans(
+    size(A, 1), size(A, 2), 
+    SparseArrays.getcolptr(A), SparseArrays.getrowval(A); maxwork
+)
 
 function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack, Pstack)
     chead = 1
@@ -243,7 +298,27 @@ function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack,
     return nblocks, timestamp
 end
 
-function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
+"""
+    strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q = nothing) where {Ti}
+
+Finds the strongly connected components of a graph, returning
+a symmetric permutation.  The matrix `A` must be square, and is provided on
+input in compressed-column form (see [`maxtrans`](@ref)).  The diagonal of
+the input matrix `A` (or `A*Q` if `Q` is provided on input) is ignored.
+
+If `Q` is not `nothing` on input, then the strongly connected components of `A*Q` 
+are found. `Q` may be flagged on input, where `Q[k] < 0` denotes a flagged column k.
+The permutation is `j = unflip(Q[k])`.  On output, `Q` is modified (the
+flags are preserved) so that `P*A*Q` is in block upper triangular form.
+
+If `Q` is `nothing`, then the permutation P is returned so that 
+`P*A*P'` is in upper block triangular form.
+
+The vector `R` gives the block boundaries, where block b is in rows/columns
+`R[b]:R[b+1]-1` of the permuted matrix, and where b ranges from 1 to the
+number of strongly connected components found.
+"""
+function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q = nothing) where {Ti}
     P = fill(Ti(EMPTY), n)
     R = fill(Ti(EMPTY), n + 1)
     Time = fill(Ti(EMPTY), n)
@@ -291,8 +366,32 @@ function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
     return nblocks, P, R
 end
 
-function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
-    nmatch, Q = maxtrans(n, n, Ap, Ai, maxwork)
+strongcomp!(A::SparseMatrixCSC, Q = nothing) = 
+    strongcomp!(size(A, 1), SparseArrays.getcolptr(A), SparseArrays.getrowval(A), Q)
+
+"""
+    order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork = -1) where {Ti}
+
+Permutes a square matrix into upper block triangular form.  It
+does this by first finding a maximum matching (or perhaps a limited matching
+if the work is limited), via the [`btf_maxtrans`](@ref) function.  If a complete
+matching is not found, `order` completes the permutation, but flags the
+columns of P*A*Q to denote which columns are not matched.  If the matrix is
+structurally rank deficient, some of the entries on the diagonal of the
+permuted matrix will be zero.  `order` then calls btf_strongcomp to find
+the strongly-connected components.
+
+On output, `P` and `Q` are the row and column permutations, where `i = P[k]` if
+row `i` of A is the kth row of `P*A*Q`, and `j = unflip(Q[k])` if column `j` of
+`A` is the kth column of `P*A*Q`.  If `Q[k] < 1`, then the (k,k)th entry in `P*A*Q`
+is structurally zero.
+
+The vector `R` gives the block boundaries, where block `b` is in rows/columns
+`R[b]:R[b+1]-1` of the permuted matrix, and where `b` ranges from 1 to the
+number of strongly connected components found.
+"""
+function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}; maxwork = -1) where {Ti}
+    nmatch, Q = maxtrans(n, n, Ap, Ai; maxwork)
     if nmatch < n
         Flag = zeros(Bool, n)
         for i ∈ 1:n
@@ -322,9 +421,7 @@ function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
     return Q, P, R, nmatch, nblocks
 end
 
-function btf(A::SparseMatrixCSC)
-    size(A, 1) == size(A, 2) || throw(DimensionMismatch("A must be a square matrix."))
-    return order(size(A, 1), SparseArrays.getcolptr(A), SparseArrays.getrowval(A), -1)
-end
+order(A::SparseMatrixCSC; maxwork = -1) = 
+    order(size(A, 1), SparseArrays.getcolptr(A), SparseArrays.getrowval(A); maxwork)
 
 end
