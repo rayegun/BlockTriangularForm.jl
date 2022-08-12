@@ -374,11 +374,11 @@ strongcomp!(A::SparseMatrixCSC, Q = nothing) =
 
 Permutes a square matrix into upper block triangular form.  It
 does this by first finding a maximum matching (or perhaps a limited matching
-if the work is limited), via the [`btf_maxtrans`](@ref) function.  If a complete
+if the work is limited), via the [`maxtrans`](@ref) function.  If a complete
 matching is not found, `order` completes the permutation, but flags the
 columns of P*A*Q to denote which columns are not matched.  If the matrix is
 structurally rank deficient, some of the entries on the diagonal of the
-permuted matrix will be zero.  `order` then calls btf_strongcomp to find
+permuted matrix will be zero.  `order` then calls [`strongcomp`](@ref) to find
 the strongly-connected components.
 
 On output, `P` and `Q` are the row and column permutations, where `i = P[k]` if
