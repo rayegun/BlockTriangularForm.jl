@@ -6,11 +6,11 @@ DocMeta.setdocmeta!(BlockTriangularForm, :DocTestSetup, :(using BlockTriangularF
 makedocs(;
     modules=[BlockTriangularForm],
     authors="Wimmerer <kimmerer@mit.edu> and contributors",
-    repo="https://github.com/"Wimmerer"/BlockTriangularForm.jl/blob/{commit}{path}#{line}",
+    repo="https://github.com/Wimmerer/BlockTriangularForm.jl/blob/{commit}{path}#{line}",
     sitename="BlockTriangularForm.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://"Wimmerer".github.io/BlockTriangularForm.jl",
+        canonical="https://Wimmerer.github.io/BlockTriangularForm.jl",
         assets=String[],
     ),
     pages=[
@@ -19,6 +19,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/"Wimmerer"/BlockTriangularForm.jl",
+    repo="github.com/Wimmerer/BlockTriangularForm.jl",
     devbranch="main",
 )
