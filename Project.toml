@@ -3,6 +3,9 @@ uuid = "adeb47b7-70bf-415a-bb24-c358563e873a"
 authors = ["Wimmerer <kimmerer@mit.edu> and contributors"]
 version = "0.1.0"
 
+[deps]
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
 [compat]
 julia = "1"
 

@@ -1,5 +1,6 @@
 module BlockTriangularForm
 
+using SparseArrays
 flip(j) = -j - 2
 isflipped(j) = j < -1
 unflip(j) = isflipped(j) ? flip(j) : j
@@ -269,7 +270,6 @@ function strongcomp!(n, Ap::Vector{Ti}, Ai::Vector{Ti}, Q) where {Ti}
             )
         end
     end
-    println(Flag)
     nblocks -= 1
     R[1:nblocks] .= 0
     for j ∈ 1:n
@@ -300,7 +300,6 @@ end
 
 function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
     nmatch, Q = maxtrans(n, n, Ap, Ai, maxwork)
-    println(nmatch)
     if nmatch < n
         Flag = zeros(Bool, n)
         for i ∈ 1:n
@@ -328,6 +327,11 @@ function order(n, Ap::Vector{Ti}, Ai::Vector{Ti}, maxwork) where {Ti}
     end
     nblocks, P, R = strongcomp!(n, Ap, Ai, Q)
     return Q, P, R, nmatch, nblocks
+end
+
+function btf(A::SparseMatrixCSC)
+    size(A, 1) == size(A, 2) || throw(DimensionMismatch("A must be a square matrix."))
+    return order(size(A, 1), SparseArrays.getcolptr(A), SparseArrays.getrowval(A), -1)
 end
 
 end
