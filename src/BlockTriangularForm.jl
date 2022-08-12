@@ -213,14 +213,10 @@ function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack,
                 Pstack[jhead] = p + 1
                 # push i onto the stack and break to recurse on i.
                 Jstack[jhead += 1] = i
-                @assert Time[i] == EMPTY
-                @assert Low[i] == EMPTY
                 break
             elseif Flag[i] == UNASSIGNED
                 # node i is visited but assigned to a block
                 # if Time[i] < Time[j] this is a backedge
-                @assert Time[i] > 0
-                @assert Low[i] > 0
                 Low[j] = min(Low[j], Time[i])
             end
             p += 1
@@ -231,11 +227,8 @@ function dfs!(j, Ap, Ai, Q, Time, Flag, Low, nblocks, timestamp, Cstack, Jstack,
 
             if Low[j] == Time[j]
                 while true
-                    @assert chead > 0
                     i = Cstack[chead]
                     chead -= 1
-                    @assert i > 0
-                    @assert Flag[i] == UNASSIGNED
                     Flag[i] = nblocks
                     i == j && break
                 end
