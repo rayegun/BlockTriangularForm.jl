@@ -29,8 +29,9 @@ using .LibBTF
     println(nblocks2)
     println(R2[1:nblocks2])
     println(R[1:nblocks])
-    # R[2] is supposed to be `n` I believe, so incrementing it is unhelpful.
-    # TODO: VERIFY THIS WITH TIM
+    # R[1] and R[2] are weird, and off the top of my head I don't know why R2[2] == n always.
+    # I'll have to peruse the code again.
+    # TODO: Figure out why this occurs.
     R2 .+= 1
     @test R2[1:nblocks2] == R[1:nblocks]
     @test nblocks == nblocks2
